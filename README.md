@@ -4,4 +4,4 @@
 
 *My code follows a simple object oriented template of an init and run function. The init function initializes the node and publisher. The run function moves the robot forward, turns hit approx. 90 degrees, and repeats.
 
-![Square](./square.gif)
+![square](./square.gif)
