@@ -10,6 +10,8 @@ import copy
 distance = 0.4 
 at_45 = False 
 turn_time = False 
+dist_270 = 0
+dist_0 = 0
 
 class WallFollower(object):
 	def __init__(self):
@@ -22,6 +24,8 @@ class WallFollower(object):
 	def process_scan(self, data):
 		global at_45 
 		global turn_time
+		global dist_270 
+		global dist_0 
 		list2 = list(copy.deepcopy(data.ranges))		 
 		try:
    			while True:
@@ -40,30 +44,51 @@ class WallFollower(object):
 				#self.twist.angular.z = 0.1
 				#self.twist_pub.publish(self.twist)
 			if(turn_time == True):
-				done = ((data.ranges[179] <= 0.5) and (data.ranges[269] <= 0.5))
+				#done = ((data.ranges[179] <= 0.5) and (data.ranges[269] <= 0.5))
+				#done = abs(data.ranges[269] 
+				done = (abs(data.ranges[179] - dist_270) <= 0.09 and (abs(data.ranges[269] - dist_0) <= 0.09) and (data.ranges[0] > 2.5) and (data.ranges[89] > 2.5))
 				if(done == True):
 					self.twist.angular.z = 0
 					self.twist_pub.publish(self.twist)
 					turn_time = False
 					at_45 = True 
+					print("DONE TURNING") 
 				else:
 					self.twist.angular.z = 0.1
 					self.twist_pub.publish(self.twist)
 				
 	
 			elif(at_45 == True):
-				if(data.ranges[0] <= data.ranges[269]):
+				print("along wall")
+				print(data.ranges[269])
+				if(data.ranges[0] <= 0.5):
 					self.twist.linear.x = 0
 					self.twist_pub.publish(self.twist)
+					dist_270 = data.ranges[269]
+					dist_0 = data.ranges[0]
 					turn_time = True 
 					at_45 = False 
-					print("MEOW")
-				else: 
+					print("TURN TIME")
+				elif(data.ranges[269] == 0.5):
 					self.twist.angular.z = 0
 					self.twist.linear.x = 0.2
 					self.twist_pub.publish(self.twist)
+				elif(data.ranges[269] < 0.5):
+					self.twist.linear.x = 0.2
+					self.twist.angular.z = 0.02
+					self.twist_pub.publish(self.twist)
+				elif(data.ranges[269] > 0.5):
+					self.twist.linear.x = 0.2
+					self.twist.angular.z = -0.02
+					self.twist_pub.publish(self.twist)
+				else:
+					prini("BAD")
+				#else: 
+					#self.twist.angular.z = 0
+					#self.twist.linear.x = 0.2
+					#self.twist_pub.publish(self.twist)
 			else:
-				if min_dist <= 0.6:
+				if min_dist <= 0.5:
 					self.twist.linear.x = 0
 					self.twist_pub.publish(self.twist)
 					high = (data.ranges[44] <= (min_dist + 0.05))
@@ -73,8 +98,8 @@ class WallFollower(object):
 						self.twist_pub.publish(self.twist)
 					else:
 						ret_bool = True 
-						for x in range(259, 289):
-							if not (abs(data.ranges[x] - data.ranges[269]) <= 0.02):
+						if not (abs(data.ranges[269] - min_dist) <= 0.005):
+								#print("LETS GO") 
 								ret_bool = False 
 						if(ret_bool == True):
 							at_45 = True 
