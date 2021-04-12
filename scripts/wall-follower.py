@@ -7,6 +7,81 @@ from geometry_msgs.msg import Vector3
 import math
 import copy 
 
+#object oriented wall follower code 
+class WallFollower(object):
+	#initialize node, publishers, and subscribers for scan/cmd_vel 
+	def __init__(self):
+		rospy.init_node("follow_wall")
+		rospy.Subscriber("/scan", LaserScan, self.process_scan)
+		self.twist_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
+		#initialize linar and angular velocity 
+		lin = Vector3()
+		ang = Vector3()
+		self.twist = Twist(linear=lin,angular=ang)
+		
+	#follow walls of a room by respondiing to scan data
+	def process_scan(self, data):
+	
+		#get dist from front of bot, account for noise by 
+		#using avr. of max/min of small range of front angles 
+		front_min = min(data.ranges[0:2] + data.ranges[-2:])
+		front_max = max(data.ranges[0:2] + data.ranges[-2:])
+		front = ((front_min + front_max) / 2.0)
+		
+		#get value of distance from right front 
+		#(359 + 269)/2 = 314
+		#avr to account for noise 
+		right_front_min = min(data.ranges[312:316])
+		right_front_max = max(data.ranges[312:316])
+		right_front = ((right_front_min + right_front_max) / 2.0)
+		
+		#started too close to wall, back up 	
+		if(front < 0.2):
+			self.twist.linear.x = -0.6
+			self.twist_pub.publish(self.twist)
+			
+		#out of range, need to turn around 
+		if((front < 0.9) and (front >= 0.2)  or right_front < 0.6): 
+			self.twist.angular.z = 0.3
+			self.twist.linear.x = 0.1
+			self.twist_pub.publish(self.twist)
+			
+		#special case of out of range 
+		elif(front < 1.2): 
+			self.twist.angular.z = 0.3
+			self.twist.linear.z = 0.3
+			self.twist_pub.publish(self.twist)
+			
+		#too far from wall, move toward 	
+		if(front >= 1.2):
+			if(right_front > 0.6):
+				self.twist.angular.z = -0.1
+				self.twist.linear.x = 0.1
+				self.twist_pub.publish(self.twist)
+			else:
+				self.twist.angular.z = 0.3
+				self.twist.linear.x = 0.0
+				self.twist_pub.publish(self.twist)
+		
+		#have reached an appropriate distance from wall, reset linear to 0 	
+		else:
+			self.twist.linear.x = 0.0
+			self.twist_pub.publish(self.twist)
+
+	#make program run indefinitely 
+	def run(self):
+		rospy.spin()
+		
+#upon executioni, run wall follower node 	
+if __name__ == '__main__':
+   	# Declare a node and run it.
+  	node = WallFollower()
+  	node.run()
+
+
+
+#all the code that did not work :( 
+'''
 distance = 0.4 
 at_45 = False 
 turn_time = False 
@@ -24,22 +99,17 @@ curr_angle = 0
 des_angle = ((90 * 2 * math.pi)/360.0)
 t1 = 0 
 t0 = 0 
+gone_once = False 
 correction = False 
-class WallFollower(object):
-	def __init__(self):
-		rospy.init_node("follow_wall")
-		rospy.Subscriber("/scan", LaserScan, self.process_scan)
-		self.twist_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
-		lin = Vector3()
-		ang = Vector3()
-		self.twist = Twist(linear=lin,angular=ang)
-	def process_scan(self, data):
+'''
+'''
 		global start 
 		global turn_45 
 		global curr_angle 
 		global t1 
 		global t0 
 		global correction
+		global gone_once 
 		right_min = min(data.ranges[265:273])
 		right_max = max(data.ranges[265:273])
 		right = ((right_min + right_max) / 2.0)
@@ -53,6 +123,8 @@ class WallFollower(object):
 		front_max = max(data.ranges[0:5] + data.ranges[-4:])
 		front = ((front_min + front_max) / 2.0)
 		if(start == True):
+			print("ang vel:")
+			print(self.twist.angular.z)
 			curr_angle = 0 
 			print("start")
 		#fix vertical 
@@ -73,33 +145,55 @@ class WallFollower(object):
 				self.twist_pub.publish(self.twist)
 		if turn_45 == True:
 			print("turn") 
-			if(curr_angle < des_angle):
-				self.twist.angular.z = 0.05
-				self.twist_pub.publish(self.twist)
-				t1 = rospy.Time.now().to_sec()
-				curr_angle = 0.05 * (t1 - t0)
+			if(gone_once == False):
+				if(curr_angle < des_angle):
+					self.twist.angular.z = 0.05
+					self.twist_pub.publish(self.twist)
+					t1 = rospy.Time.now().to_sec()
+					curr_angle = 0.05 * (t1 - t0)
+				else: 
+					turn_45 = False 
+					correction = True 
+					self.twist.angular.z = 0.0
+					self.twist_pub.publish(self.twist)
 			else: 
-				turn_45 = False 
-				correction = True 
-				self.twist.angular.z = 0.0
-				self.twist_pub.publish(self.twist)
+				#right 
+				cond1 = (right - 0.8) <= 0.08 
+				#back 
+				cond2 = (back - 0.8) <= 0.08 
+				if(cond1 and cond2):
+					self.twist.angular.z = 0.0
+					self.twist_pub.publish(self.twist)
+					turn_45 = False 
+					correction = True 
+				else: 
+					self.twist.angular.z = 0.05 
+					self.twist_pub.publish(self.twist)
+				
 		if(correction == True): 
 			if(right_top < right):
-				self.twist.angular.z = -0.05
+				self.twist.angular.z = 0.05
 				self.twist_pub.publish(self.twist)
 				print("top")
 			if(right_bot < right):
-				self.twist.angular.z = 0.05
+				self.twist.angular.z = -0.05
 				self.twist_pub.publish(self.twist) 
 				#need to tilt 
 				print("bot")
 			else:
+				self.twist.angular.z = 0
+				self.twist_pub.publish(self.twist)
 				correction = False 
+				gone_once - True
 				start = True 
+				print("we sleep") 
+				rospy.sleep(1)
+			
+		'''
 			
 	
 	
-		'''
+'''
 		global start 
 		global turn_45
 		global true_front
@@ -179,7 +273,7 @@ class WallFollower(object):
 				self.twist_pub.publish(self.twist)
 		'''
 			
-		'''
+'''
 
 		elif(turn_45 == True):
 				print("along wall")
@@ -227,7 +321,7 @@ class WallFollower(object):
 				self.twist_pub.publish(self.twist)
 				'''
 				
-		'''
+'''
 		if(turn_45 == True):
 			min_dist = (min(data.ranges))
 			print("min dist:") 
@@ -256,7 +350,7 @@ class WallFollower(object):
 				self.twist.angular.z = 0.03
 				self.twist_pub.publish(self.twist)
 		'''
-		'''
+'''
 		if(turn_45 == True):
 			cond1 = abs(right - 0.5) <= 0.01
 			if(cond1):
@@ -272,7 +366,7 @@ class WallFollower(object):
 				self.twist.angular.z = k_p * err
 				self.twist_pub.publish(self.twist)
 		'''
-		'''
+'''
 		if(turn_45 == True):
 			cond1 = abs(data.ranges[269] - 0.5) <= 0.05
 			cond2 = abs(data.ranges[224] - (0.5 * math.sqrt(2))) <= 0.05
@@ -291,7 +385,7 @@ class WallFollower(object):
 				self.twist_pub.publish(self.twist)
 		'''
 			
-		'''
+'''
 			if((data.ranges[0] - 0.5) < -0.04):
 				self.twist.linear.x = -0.01
 				self.twist_pub.publish(self.twist)
@@ -306,7 +400,7 @@ class WallFollower(object):
 				self.twist.linear.x = 0.1
 				self.twist_pub.publish(self.twist)
 		'''
-		'''
+'''
 		if(turn_45 == True):
 			cond1 = abs(data.ranges[269] - 0.5) <= 0.04
 			cond2 = abs(data.ranges[224] - (0.5 * math.sqrt(2))) <= 0.06
@@ -330,7 +424,7 @@ class WallFollower(object):
 				self.twist_pub.publish(self.twist)
 		'''
 	
-		'''
+'''
 		global at_45 
 		global turn_time
 		global dist_270 
@@ -432,12 +526,3 @@ class WallFollower(object):
 					self.twist.linear.x = 0.1
 					self.twist_pub.publish(self.twist)
 			'''
-	
-	def run(self):
-		rospy.spin()
-       	
-if __name__ == '__main__':
-   	# Declare a node and run it.
-  	node = WallFollower()
-  	node.run()
-
