@@ -54,6 +54,7 @@ class WallFollower(object):
 			
 		#too far from wall, move toward 	
 		if(front >= 1.2):
+			#backward adjustment of angle needed 
 			if(right_front > 0.6):
 				self.twist.angular.z = -0.1
 				self.twist.linear.x = 0.1
